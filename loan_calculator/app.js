@@ -3,7 +3,9 @@ const { URL } = require('url'); // imports URL class of `url` module
 
 const PORT = 3000;
 
-const HTML_START = `
+const HANDLEBARS = require('handlebars');
+
+const SOURCE = `
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -29,11 +31,17 @@ const HTML_START = `
       }
 
       table {
-        font-size: 2rem;
+        font-size: 1.5rem;
       }
-
       th {
         text-align: right;
+      }
+      td {
+        text-align: center;
+      }
+      th,
+      td {
+        padding: 0.5rem;
       }
     </style>
   </head>
@@ -42,14 +50,47 @@ const HTML_START = `
       <h1>Loan Calculator</h1>
       <table>
         <tbody>
-`;
-
-const HTML_END = `
+          <tr>
+            <th>Amount:</th>
+            <td>
+              <a href='/?amount={{amountDecrement}}&duration={{durationInYears}}'>- $100</a>
+            </td>
+            <td>$ {{amount}}</td>
+            <td>
+              <a href='/?amount={{amountIncrement}}&duration={{durationInYears}}'>+ $100</a>
+            </td>
+          </tr>
+          <tr>
+            <th>Duration:</th>
+            <td>
+              <a href='/?amount={{amount}}&duration={{durationDecrement}}'>- 1 year</a>
+            </td>
+            <td>{{duration}} years</td>
+            <td>
+              <a href='/?amount={{amount}}&duration={{durationIncrement}}'>+ 1 year</a>
+            </td>
+          </tr>
+          <tr>
+            <th>APR:</th>
+            <td colspan='3'>{{apr}}%</td>
+          </tr>
+          <tr>
+            <th>Monthly payment:</th>
+            <td colspan='3'>$ {{monthlyPayment}}</td>
+          </tr>
         </tbody>
       </table>
     </article>
   </body>
-</html>`;
+</html>
+`;
+
+const LOAN_OFFER_TEMPLATE = HANDLEBARS.compile(SOURCE);
+
+function render(template, data) {
+  const html = template(data);
+  return html;
+}
 
 function getParams(path) {
   const myURL = new URL(path, 'http://localhost:3000');
@@ -67,44 +108,37 @@ function calculateLoan(amount, durationInYears, APR) {
 }
 
 function generateLoanOffer(params) {
-  const APR = 3.49;
-  const amount = Number(params.get('amount'));
-  const durationInYears = Number(params.get('duration'));
-  const monthlyPayment = calculateLoan(amount, durationInYears, APR);
-  let content = `<tr>
-                 <th>Amount:</th>
-                 <td><a href='/?amount=${amount - 10000}&duration=${durationInYears}'>- $10,000</a></td>
-                 <td>${amount}</td>
-                 <td><a href='/?amount=${amount + 10000}&duration=${durationInYears}'>+ $10,000</a></td>
-                 </tr>
-                 <tr>
-                 <th>Duration:</th>
-                 <td><a href='/?amount=${amount}&duration=${durationInYears - 1}'>- 1 year</a></td>
-                 <td>${durationInYears} years</td>
-                 <td><a href='/?amount=${amount}&duration=${durationInYears + 1}'>+ 1 year</a></td>
-                 </tr>
-                 <tr>
-                 <th>APR:</th>
-                 <td colspan='3'>${APR}%</td>
-                 </tr>
-                 <tr>
-                 <th>Monthly payment:</th>
-                 <td colspan='3'>${monthlyPayment}</td>
-                 </tr>`
+  const APR = 5;
+  const data = {};
 
-  return `${HTML_START}${content}${HTML_END}`;
+  data.amount = Number(params.get('amount'));
+  data.amountIncrement = data.amount + 100;
+  data.amountDecrement = data.amount - 100;
+  data.durationInYears = Number(params.get('duration'));
+  data.durationIncrement = data.durationInYears + 1;
+  data.durationDecrement = data.durationInYears - 1;
+  data.apr = APR;
+  data.monthlyPayment = calculateLoan(data.amount, data.durationInYears, data.apr);
+
+  return data;
 }
 
 const SERVER = HTTP.createServer((req, res) => {
   const path = req.url;
   const params = getParams(path);
 
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'text/html');
+  if (path === '/favicon.ico') {
+    res.statusCode = 400;
+    res.end();
+  } else {
+    const data = generateLoanOffer(params);
+    const content = render(LOAN_OFFER_TEMPLATE, data);
 
-  const content = generateLoanOffer(params);
-  res.write(content);
-  res.end();
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/html');
+    res.write(content);
+    res.end();
+  }
 });
 
 SERVER.listen(PORT, () => {
