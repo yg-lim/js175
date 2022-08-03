@@ -1,7 +1,27 @@
 doctype html
-html(lang='en')
+
+html(lang=language)
   head
-    title Express Application
+    block page_title
+      title This is the page title
+    meta(charset="UTF-8")
+    link(rel="stylesheet" href="/stylesheets/styles.css")
+
   body
-    include includes/header.pug
-    block appContent
+    nav
+      ul
+        each country in countries
+          li 
+            a(href=country.path
+              class=currentPathClass(country.path, currentPath)
+            )
+              img.flag(src=`/images/${country.flag}`
+                       alt=country.alt
+                       title=country.title)
+
+    header
+      block greeting
+        h1 Hello World!
+
+    main
+      block software_engineer
