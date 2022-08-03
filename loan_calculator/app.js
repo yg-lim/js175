@@ -1,49 +1,29 @@
+/* eslint-disable no-lonely-if */
 const HTTP = require('http');
 const { URL } = require('url'); // imports URL class of `url` module
+const HANDLEBARS = require('handlebars');
+const FS = require('fs');
+const PATH = require('path');
 
 const PORT = 3000;
 
-const HANDLEBARS = require('handlebars');
+const APR = 3.49;
 
-const SOURCE = `
+const MIME_TYPES = {
+  '.css': 'text/css',
+  '.js': 'application/javascript',
+  '.jpg': 'image/jpeg',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+};
+
+const LOAN_OFFER_SOURCE = `
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <title>Loan Calculator</title>
-    <style type="text/css">
-      body {
-        background: rgba(250, 250, 250);
-        font-family: sans-serif;
-        color: rgb(50, 50, 50);
-      }
-
-      article {
-        width: 100%;
-        max-width: 40rem;
-        margin: 0 auto;
-        padding: 1rem 2rem;
-      }
-
-      h1 {
-        font-size: 2.5rem;
-        text-align: center;
-      }
-
-      table {
-        font-size: 1.5rem;
-      }
-      th {
-        text-align: right;
-      }
-      td {
-        text-align: center;
-      }
-      th,
-      td {
-        padding: 0.5rem;
-      }
-    </style>
+    <link rel="stylesheet" href="/assets/css/styles.css">
   </head>
   <body>
     <article>
@@ -85,7 +65,31 @@ const SOURCE = `
 </html>
 `;
 
-const LOAN_OFFER_TEMPLATE = HANDLEBARS.compile(SOURCE);
+const LOAN_FORM_SOURCE = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Loan Calculator</title>
+    <link rel="stylesheet" href="/assets/css/styles.css">
+  </head>
+  <body>
+    <article>
+      <h1>Loan Calculator</h1>
+      <form action="/loan-offer" method="get">
+        <p>All loans are offered at an APR of {{apr}}%.</p>
+        <label for="amount">How much do you want to borrow (in dollars)?</label>
+        <input type="number" name="amount" value="">
+        <label for="amount">How much time do you want to pay back your loan?</label>
+        <input type="number" name="duration" value="">
+        <input type="submit" name="" value="Get loan offer!">
+      </form>
+    </article>
+  </body>
+</html>
+`;
+
+const LOAN_OFFER_TEMPLATE = HANDLEBARS.compile(LOAN_OFFER_SOURCE);
+const LOAN_FORM_TEMPLATE = HANDLEBARS.compile(LOAN_FORM_SOURCE);
 
 function render(template, data) {
   const html = template(data);
@@ -97,10 +101,15 @@ function getParams(path) {
   return myURL.searchParams;
 }
 
-function calculateLoan(amount, durationInYears, APR) {
+function getPathname(path) {
+  const myURL = new URL(path, `http://localhost:${PORT}`);
+  return myURL.pathname;
+}
+
+function calculateLoan(amount, durationInYears, apr) {
   const NUM_OF_MONTHS_IN_YEAR = 12;
   const durationInMonths = durationInYears * NUM_OF_MONTHS_IN_YEAR;
-  const monthlyInterestRate = (APR / 100) / NUM_OF_MONTHS_IN_YEAR;
+  const monthlyInterestRate = (apr / 100) / NUM_OF_MONTHS_IN_YEAR;
   const monthlyPayment = amount * (monthlyInterestRate
     / (1 - (1 + monthlyInterestRate) ** -durationInMonths));
 
@@ -108,7 +117,6 @@ function calculateLoan(amount, durationInYears, APR) {
 }
 
 function generateLoanOffer(params) {
-  const APR = 5;
   const data = {};
 
   data.amount = Number(params.get('amount'));
@@ -125,20 +133,37 @@ function generateLoanOffer(params) {
 
 const SERVER = HTTP.createServer((req, res) => {
   const path = req.url;
-  const params = getParams(path);
+  const pathname = getPathname(path);
+  const fileExtension = PATH.extname(pathname);
 
-  if (path === '/favicon.ico') {
-    res.statusCode = 400;
-    res.end();
-  } else {
-    const data = generateLoanOffer(params);
-    const content = render(LOAN_OFFER_TEMPLATE, data);
+  FS.readFile(`./public${pathname}`, (err, FSdata) => {
+    if (FSdata) {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', `${MIME_TYPES[fileExtension]}`);
+      res.write(`${FSdata}\n`);
+      res.end();
+    } else {
+      if (pathname === '/') {
+        const content = render(LOAN_FORM_TEMPLATE, { apr: APR });
 
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'text/html');
-    res.write(content);
-    res.end();
-  }
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/html');
+        res.write(`${content}\n`);
+        res.end();
+      } else if (pathname === '/loan-offer') {
+        const data = generateLoanOffer(getParams(path));
+        const content = render(LOAN_OFFER_TEMPLATE, data);
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'text/html');
+        res.write(`${content}\n`);
+        res.end();
+      } else {
+        res.statusCode = 404;
+        res.end();
+      }
+    }
+  });
 });
 
 SERVER.listen(PORT, () => {
