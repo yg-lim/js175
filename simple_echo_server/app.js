@@ -7,6 +7,7 @@ const SERVER = HTTP.createServer((req, res) => {
 
   if (path === '/favicon.ico') {
     res.statusCode = 404;
+    res.write(`Favicon not found..`);
     res.end();
   } else {
     res.statusCode = 200;
@@ -17,5 +18,5 @@ const SERVER = HTTP.createServer((req, res) => {
 });
 
 SERVER.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Listening on port number ${PORT}...`);
 });
