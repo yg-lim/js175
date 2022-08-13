@@ -1,20 +1,16 @@
+/* eslint-disable no-param-reassign */
 const HTTP = require('http');
 const { URL } = require('url');
 const HANDLEBARS = require('handlebars');
-const PATH = require('path');
-const FS = require('fs');
+const QUERYSTRING = require('querystring');
+const ROUTER = require('router');
+const FINALHANDLER = require('finalhandler');
+const SERVESTATIC = require('serve-static');
 
-const MIME_TYPES = {
-  '.css': 'text/css',
-  '.js': 'application/javascript',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.ico': 'image/x-icon',
-};
 const PORT = 3000;
 const BASE_URL = `http://localhost:${3000}`;
 const NUMBER_OF_MONTHS_IN_YEAR = 12;
-const APR = 3;
+const APR = 3.5;
 const LOAN_OFFER_SOURCE = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -30,21 +26,21 @@ const LOAN_OFFER_SOURCE = `<!DOCTYPE html>
           <tr>
             <th>Amount:</th>
             <td>
-              <a href='/?amount={{amountDecrement}}&duration={{durationInYears}}'>- $100</a>
+              <a href='/loan-offer?amount={{amountDecrement}}&duration={{durationInYears}}'>- $100</a>
             </td>
             <td>$ {{loanAmount}}</td>
             <td>
-              <a href='/?amount={{amountIncrement}}&duration={{durationInYears}}'>+ $100</a>
+              <a href='/loan-offer?amount={{amountIncrement}}&duration={{durationInYears}}'>+ $100</a>
             </td>
           </tr>
           <tr>
             <th>Duration:</th>
             <td>
-              <a href='/?amount={{loanAmount}}&duration={{durationDecrement}}'>- 1 year</a>
+              <a href='/loan-offer?amount={{loanAmount}}&duration={{durationDecrement}}'>- 1 year</a>
             </td>
             <td>{{durationInYears}} years</td>
             <td>
-              <a href='/?amount={{loanAmount}}&duration={{durationIncrement}}'>+ 1 year</a>
+              <a href='/loan-offer?amount={{loanAmount}}&duration={{durationIncrement}}'>+ 1 year</a>
             </td>
           </tr>
           <tr>
@@ -71,7 +67,7 @@ const LOAN_FORM_SOURCE = `<!DOCTYPE html>
   <body>
     <article>
       <h1>Loan Calculator</h1>
-      <form action="/loan-offer" method="get">
+      <form action="/loan-offer" method="post">
         <p>All loans are offered at an APR of {{apr}}%.</p>
         <label for="amount">How much do you want to borrow (in dollars)?</label>
         <input type="number" name="amount" value="">
@@ -87,6 +83,19 @@ const LOAN_FORM_SOURCE = `<!DOCTYPE html>
 const LOAN_OFFER_TEMPLATE = HANDLEBARS.compile(LOAN_OFFER_SOURCE);
 const LOAN_FORM_TEMPLATE = HANDLEBARS.compile(LOAN_FORM_SOURCE);
 
+function parseFormData(request, callback) {
+  let body = '';
+  request.on('data', (chunk) => {
+    body += chunk.toString();
+  });
+  request.on('end', () => {
+    const data = QUERYSTRING.parse(body);
+    data.loanAmount = Number(data.amount);
+    data.durationInYears = Number(data.duration);
+    callback(data);
+  });
+}
+
 function render(template, data) {
   const html = template(data);
   return html;
@@ -94,12 +103,12 @@ function render(template, data) {
 
 function getParams(pathAndQueryString) {
   const url = new URL(pathAndQueryString, BASE_URL);
-  return url.searchParams;
-}
+  const { searchParams } = url;
+  const data = {};
+  data.loanAmount = Number(searchParams.get('amount'));
+  data.durationInYears = Number(searchParams.get('duration'));
 
-function getPath(pathAndQueryString) {
-  const url = new URL(pathAndQueryString, BASE_URL);
-  return url.pathname;
+  return data;
 }
 
 function calculateMonthlyPayment(loanAmount, monthlyInterestRate, durationInMonths) {
@@ -109,11 +118,8 @@ function calculateMonthlyPayment(loanAmount, monthlyInterestRate, durationInMont
   return monthlyPayment.toFixed(2);
 }
 
-function generateLoanOffer(params) {
-  const data = {};
+function generateLoanOffer(data) {
   data.apr = APR;
-  data.durationInYears = Number(params.get('duration'));
-  data.loanAmount = Number(params.get('amount'));
   data.amountIncrement = data.loanAmount + 100;
   data.amountDecrement = data.loanAmount - 100;
   data.durationIncrement = data.durationInYears + 1;
@@ -123,39 +129,50 @@ function generateLoanOffer(params) {
   const monthlyInterestRate = (APR / 100) / NUMBER_OF_MONTHS_IN_YEAR;
   // eslint-disable-next-line max-len
   data.monthlyPayment = calculateMonthlyPayment(data.loanAmount, monthlyInterestRate, durationInMonths);
-  const content = render(LOAN_OFFER_TEMPLATE, data);
-  return content;
+  return data;
 }
 
-const SERVER = HTTP.createServer((req, res) => {
-  const pathAndQueryString = req.url;
-  const params = getParams(pathAndQueryString);
-  const path = getPath(pathAndQueryString);
-  const fileExtension = PATH.extname(path);
+const router = ROUTER();
+router.use(SERVESTATIC('public'));
 
-  FS.readFile(`./public${path}`, (_, data) => {
-    if (data) {
-      res.statusCode = 200;
-      res.setHeader('Content-Type', `${MIME_TYPES[fileExtension]}`);
-      res.write(`${data}\n`);
-      res.end();
-    } else if (!data && path === '/') {
-      const content = render(LOAN_FORM_TEMPLATE, { apr: APR });
+router.get('/', (req, res) => {
+  const content = render(LOAN_FORM_TEMPLATE, { apr: APR });
 
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'text/html');
-      res.write(`${content}`);
-      res.end();
-    } else if (!data && path === '/loan-offer') {
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'text/html');
-      res.write(`${generateLoanOffer(params)}`);
-      res.end();
-    } else {
-      res.statusCode = 404;
-      res.end();
-    }
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/html');
+  res.write(`${content}\n`);
+  res.end();
+});
+
+router.get('/loan-offer', (req, res) => {
+  const data = generateLoanOffer(getParams(req.url));
+  const content = render(LOAN_OFFER_TEMPLATE, data);
+
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/html');
+  res.write(`${content}\n`);
+  res.end();
+});
+
+router.post('/loan-offer', (req, res) => {
+  parseFormData(req, (parsedData) => {
+    const data = generateLoanOffer(parsedData);
+    const content = render(LOAN_OFFER_TEMPLATE, data);
+
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/html');
+    res.write(`${content}\n`);
+    res.end();
   });
+});
+
+router.get('*', (req, res) => {
+  res.statusCode = 404;
+  res.end();
+});
+
+const SERVER = HTTP.createServer((req, res) => {
+  router(req, res, FINALHANDLER(req, res));
 });
 
 SERVER.listen(PORT, () => {});
