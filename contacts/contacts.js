@@ -1,6 +1,7 @@
 const express = require('express');
 const morgan = require('morgan');
 const app = express();
+const { body, validationResult } = require('express-validator');
 
 const PORT = 3000;
 
@@ -52,11 +53,11 @@ function exceedsMaxCharacterLimit(input) {
 }
 
 function containsNonAlphabeticalChars(input) {
-  return !!input.match(/[^a-z]/i);
+  return input.test(/[^a-z]/i);
 }
 
 function isUSPhoneNumberFormat(input) {
-  return !!input.match(/^\d{3}-\d{3}-\d{4}$/i);
+  return input.test(/^\d{3}-\d{3}-\d{4}$/i);
 }
 
 function trimUserInputs(req, res, next) {
