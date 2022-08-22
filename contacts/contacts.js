@@ -44,118 +44,17 @@ const sortContacts = contacts => {
   });
 };
 
-function inputIsEmpty(input) {
-  return input.length === 0;
+const validateName = (name, whichName) => {
+  return body(name)
+    .trim()
+    .isLength({ min: 1})
+    .withMessage(`${whichName} name is required.`)
+    .bail()
+    .isLength({ max: 25 })
+    .withMessage(`${whichName} name is too long. Maximum length is 25 characters.`)
+    .isAlpha()
+    .withMessage(`${whichName} name contains invalid characters. The name must be alphabetic.`);
 }
-
-function exceedsMaxCharacterLimit(input) {
-  return input.length > 25;
-}
-
-function containsNonAlphabeticalChars(input) {
-  return input.test(/[^a-z]/i);
-}
-
-function isUSPhoneNumberFormat(input) {
-  return input.test(/^\d{3}-\d{3}-\d{4}$/i);
-}
-
-function trimUserInputs(req, res, next) {
-  Object.keys(req.body).forEach(key => {
-    req.body[key] = req.body[key].trim();
-  });
-
-  next();
-}
-
-function createErrorMessagesArray(req, res, next) {
-  res.locals.errorMessages = [];
-  next();
-}
-
-function checkValidFirstName(req, res, next) {
-  const input = req.body.firstName;
-  const errorMessages = [];
-  
-  if (inputIsEmpty(input)) errorMessages.push('First name is required.');
-  if (exceedsMaxCharacterLimit(input)) errorMessages.push('First name cannot exceed 25 characters.');
-  if (containsNonAlphabeticalChars(input)) errorMessages.push('First name must consist only of alphabetical characters');
-
-  if (errorMessages.length > 0) res.locals.errorMessages.push(errorMessages.join(' '));
-
-  next();
-};
-
-function checkValidLastName(req, res, next) {
-  const input = req.body.lastName;
-  const errorMessages = [];
-
-  if (inputIsEmpty(input)) errorMessages.push('Last name is required.');
-  if (exceedsMaxCharacterLimit(input)) errorMessages.push('Last name cannot exceed 25 characters.');
-  if (containsNonAlphabeticalChars(input)) errorMessages.push('Last name must consist only of alphabetical characters');
-
-  if (errorMessages.length > 0) res.locals.errorMessages.push(errorMessages.join(' '));
-
-  next();
-};
-
-function checkContactNameExists(req, res, next) {
-  const firstName = req.body.firstName.toLowerCase();
-  const lastName = req.body.lastName.toLowerCase();
-
-  contactData.forEach(contact => {
-    const contactFirstName = contact.firstName.toLowerCase();
-    const contactLastName = contact.lastName.toLowerCase();
-
-    if (firstName === contactFirstName && lastName === contactLastName) {
-      res.locals.errorMessages.push('Contact already exists.');
-    }
-  });
-
-  next();
-}
-
-function checkValidPhoneNumber(req, res, next) {
-  const input = req.body.phoneNumber;
-  const errorMessages = [];
-
-  if (inputIsEmpty(input)) {
-    errorMessages.push('Phone number is required.');
-  } else if (!inputIsEmpty(input) && !isUSPhoneNumberFormat(input)) {
-    errorMessages.push('Phone number must be ###-###-#### format.');
-  }
-
-  if (errorMessages.length > 0) res.locals.errorMessages.push(errorMessages.join(' '));
-
-  next();
-};
-
-function displayErrorMessages(req, res, next) {
-  if (res.locals.errorMessages.length > 0) {
-    res.render('new-contact', {
-      errorMessages: res.locals.errorMessages,
-      ...req.body
-    });
-  } else {
-    next();
-  }
-};
-
-function saveContactAndDisplayPage(req, res) {
-  contactData.push({ ...req.body });
-  res.redirect('/contacts');
-};
-
-const newContactFunctions = [
-  createErrorMessagesArray,
-  trimUserInputs,
-  checkValidFirstName,
-  checkValidLastName,
-  checkContactNameExists,
-  checkValidPhoneNumber,
-  displayErrorMessages,
-  saveContactAndDisplayPage,
-];
 
 app.set('views', './views');
 app.set('view engine', 'pug');
@@ -178,7 +77,34 @@ app.get('/contacts/new', (req, res) => {
   res.render('new-contact');
 });
 
-app.post('/contacts/new', newContactFunctions);
+app.post('/contacts/new',
+  [
+    validateName("firstName", "First"),
+    validateName("lastName", "Last"),
+    body("phoneNumber")
+      .trim()
+      .isLength({ min: 1 })
+      .withMessage('Phone number is required.')
+      .bail()
+      .matches(/^\d{3}-\d{3}-\d{4}$/)
+      .withMessage('Invalid phone number format. Use ###-###-####'),
+  ],
+  (req, res, next) => {
+    let errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      res.render('new-contact', {
+        errorMessages: errors.array().map(error => error.msg),
+        ...req.body,
+      });
+    } else {
+      next();
+    }
+  },
+  (req, res) => {
+    contactData.push({ ...req.body });
+    res.redirect('/contacts');
+  }
+);
 
 app.listen(PORT, 'localhost', () => {
   console.log(`Server listening on port number ${PORT}...`);
