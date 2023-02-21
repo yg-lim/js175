@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+  <title>Loan Calculator</title>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html {
+      font: 18px/1.5 Helvetica, Arial, sans-serif;
+      background-color: #f8f8f8;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    p {
+      text-align: center;
+    }
+
+    main {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    
+    dd {
+      margin: 0;
+    }
+
+    input[type='text'] {
+      width: 100%;
+      height: 1.4rem;
+      margin-top: 0.5rem;
+      border-color: #afd9ff;
+      border-style: groove;
+      border-radius: 3px;
+    }
+
+    button {
+      font-size: 1rem;
+      padding: 10px;
+      background-color: green;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      display: block;
+      margin: 0 auto;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Loan Calculator</h1>
+  <p>All loans are offered at an APR of {{apr}}%.</p>
+  <form action="/loan-offer" method="get">
+    <dl>
+      <dt><label for="amount">How much do you want to borrow (in dollars)?</label></dt>
+      <dd><input type="text" id="amount" name="amount"></dd>
+    </dl>
+
+    <dl>
+      <dt><label for="duration">How much time do you want to pay back your loan (in years)?</label></dt>
+      <dd><input type="text" id="duration" name="duration"></dd>
+    </dl>
+
+    <button>Get loan offer!</button>
+  </form>
+</main>
+</body>
+</html>
